@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from aiohttp.web import Request, Response
-from homeassistant.components import webhook
+from homeassistant.components import webhook as ha_webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -41,7 +41,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: IrminsulConfigEntry) -> 
             request,
         )
 
-    webhook.async_register(
+    ha_webhook.async_register(
         hass,
         DOMAIN,
         f"Irminsul Health: {entry.data[CONF_SUBJECT_NAME]}",
@@ -58,7 +58,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: IrminsulConfigEntry) ->
     """Unload a config entry."""
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
-    webhook.async_unregister(hass, entry.data[CONF_WEBHOOK_ID])
+    ha_webhook.async_unregister(hass, entry.data[CONF_WEBHOOK_ID])
     return True
 
 
