@@ -4,6 +4,8 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.irminsul_health.const import (
+    CONF_ALLOW_REMOTE,
+    CONF_INGEST_TOKEN,
     CONF_SUBJECT_ID,
     CONF_SUBJECT_NAME,
     CONF_WEBHOOK_ID,
@@ -20,13 +22,19 @@ async def test_create_health_profile(hass) -> None:
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
-        {CONF_SUBJECT_ID: "poera", CONF_SUBJECT_NAME: "Poera"},
+        {
+            CONF_SUBJECT_ID: "poera",
+            CONF_SUBJECT_NAME: "Poera",
+            CONF_ALLOW_REMOTE: False,
+        },
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Poera"
     assert result["data"][CONF_SUBJECT_ID] == "poera"
     assert len(result["data"][CONF_WEBHOOK_ID]) == 64
+    assert len(result["data"][CONF_INGEST_TOKEN]) >= 43
+    assert result["data"][CONF_ALLOW_REMOTE] is False
     assert "webhook_url" in result["description_placeholders"]
 
 
@@ -37,7 +45,11 @@ async def test_reject_duplicate_profile(hass) -> None:
     )
     await hass.config_entries.flow.async_configure(
         first["flow_id"],
-        {CONF_SUBJECT_ID: "poera", CONF_SUBJECT_NAME: "Poera"},
+        {
+            CONF_SUBJECT_ID: "poera",
+            CONF_SUBJECT_NAME: "Poera",
+            CONF_ALLOW_REMOTE: False,
+        },
     )
 
     second = await hass.config_entries.flow.async_init(
@@ -45,7 +57,11 @@ async def test_reject_duplicate_profile(hass) -> None:
     )
     result = await hass.config_entries.flow.async_configure(
         second["flow_id"],
-        {CONF_SUBJECT_ID: "poera", CONF_SUBJECT_NAME: "Poera 2"},
+        {
+            CONF_SUBJECT_ID: "poera",
+            CONF_SUBJECT_NAME: "Poera 2",
+            CONF_ALLOW_REMOTE: False,
+        },
     )
 
     assert result["type"] is FlowResultType.ABORT

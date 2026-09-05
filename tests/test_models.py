@@ -1,9 +1,12 @@
 """Tests for observation validation."""
 
+from datetime import UTC, datetime
+
 import pytest
 
 from custom_components.irminsul_health.models import (
     ObservationValidationError,
+    RequestRateLimiter,
     parse_observation,
 )
 
@@ -60,3 +63,27 @@ def test_reject_invalid_observation(field: str, value: object) -> None:
 
     with pytest.raises(ObservationValidationError):
         parse_observation(payload)
+
+
+def test_reject_future_observation() -> None:
+    """Reject timestamps beyond the allowed clock skew."""
+    with pytest.raises(ObservationValidationError, match="future"):
+        parse_observation(
+            {
+                "metric": "uric_acid",
+                "value": 426,
+                "unit": "µmol/L",
+                "observed_at": "2026-09-05T00:11:00+00:00",
+            },
+            now=datetime(2026, 9, 5, tzinfo=UTC),
+        )
+
+
+def test_rate_limiter() -> None:
+    """Return a retry delay after the allowed request count."""
+    limiter = RequestRateLimiter(maximum=2, window_seconds=60)
+
+    assert limiter.consume(0) is None
+    assert limiter.consume(1) is None
+    assert limiter.consume(2) == 58
+    assert limiter.consume(61) is None

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 from http import HTTPStatus
 from typing import Any
@@ -20,6 +21,7 @@ from .models import (
     ObservationValidationError,
     parse_observation,
 )
+from .storage import ObservationConflictError
 
 MAX_BATCH_SIZE = 100
 
@@ -28,9 +30,26 @@ async def async_handle_webhook(
     hass: HomeAssistant,
     runtime_data: IrminsulRuntimeData,
     subject_id: str,
+    ingest_token: str,
     request: Request,
 ) -> Response:
     """Receive a versioned observation batch."""
+    authorization = request.headers.get("Authorization", "")
+    if not hmac.compare_digest(authorization, f"Bearer {ingest_token}"):
+        return web.json_response(
+            {"error": "unauthorized"},
+            status=HTTPStatus.UNAUTHORIZED,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    retry_after = runtime_data.rate_limiter.consume(hass.loop.time())
+    if retry_after is not None:
+        return web.json_response(
+            {"error": "rate limit exceeded"},
+            status=HTTPStatus.TOO_MANY_REQUESTS,
+            headers={"Retry-After": str(retry_after)},
+        )
+
     if (
         request.content_length is not None
         and request.content_length > MAX_REQUEST_BYTES
@@ -42,7 +61,7 @@ async def async_handle_webhook(
         if len(body) > MAX_REQUEST_BYTES:
             return _error("request is too large", HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
         payload: Any = json.loads(body)
-    except (json.JSONDecodeError, UnicodeDecodeError):
+    except (json.JSONDecodeError, RecursionError, UnicodeDecodeError):
         return _error("body must be valid JSON", HTTPStatus.BAD_REQUEST)
 
     if not isinstance(payload, dict):
@@ -66,7 +85,10 @@ async def async_handle_webhook(
     except ObservationValidationError as err:
         return _error(str(err), HTTPStatus.BAD_REQUEST)
 
-    accepted, duplicates = await runtime_data.store.async_add_many(observations)
+    try:
+        accepted, duplicates = await runtime_data.store.async_add_many(observations)
+    except ObservationConflictError as err:
+        return _error(str(err), HTTPStatus.CONFLICT)
     if accepted:
         runtime_data.notify()
         hass.bus.async_fire(
