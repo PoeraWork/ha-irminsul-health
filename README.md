@@ -19,15 +19,17 @@ Copy `custom_components/irminsul_health` into the Home Assistant `config`
 directory, restart Home Assistant, then add **Irminsul Health** from
 **Settings → Devices & services**.
 
-The setup result displays a private webhook URL. Treat the URL as a password.
-Use HTTPS or a trusted VPN when calling it remotely.
+The setup result displays a private webhook URL and an ingest token. Treat both
+as passwords. New profiles accept local network requests only by default. Enable
+remote requests explicitly and use HTTPS or a trusted VPN.
 
 Open **Reconfigure** on the integration entry to view the current URL or generate
-a new one. Rotating it invalidates the old URL after the integration reloads.
+a new one. Rotating credentials invalidates both the old URL and token after the
+integration reloads.
 
 ## Send an observation
 
-Send a `POST` request with JSON:
+Send a `POST` request with `Authorization: Bearer <ingest token>` and JSON:
 
 ```json
 {
@@ -47,7 +49,8 @@ Send a `POST` request with JSON:
 
 `mg/dL` is also accepted and converted to `µmol/L`. `observed_at` must contain a
 time-zone offset. Repeating the same `external_id` is safe and does not create a
-duplicate record.
+duplicate record. Reusing it for different content is rejected. Timestamps more
+than ten minutes in the future are rejected.
 
 Example response:
 
@@ -68,6 +71,18 @@ Example response:
 
 High-frequency raw samples, custom dashboard cards, OCR, source subentries, and
 long-term-statistics imports are intentionally outside version 0.1.
+
+## Privacy and data lifetime
+
+Health observations are stored as permission-restricted but unencrypted JSON in
+Home Assistant's `.storage` directory. Latest values are normal sensor states,
+so Home Assistant Recorder, backups, and users who can read states may retain or
+view them. Removing an Irminsul Health profile deletes its private observation
+store, but it does not erase Recorder history or existing backups.
+
+Do not log complete `/api/webhook/...` paths in a reverse proxy. If a URL or
+ingest token is exposed, rotate the credentials from the integration's
+**Reconfigure** flow.
 
 ## Development
 

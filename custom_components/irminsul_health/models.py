@@ -3,17 +3,24 @@
 from __future__ import annotations
 
 import math
+from collections import deque
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import Any
 
-from .const import METRIC_URIC_ACID, UNIT_URIC_ACID
+from .const import (
+    METRIC_URIC_ACID,
+    RATE_LIMIT_REQUESTS,
+    RATE_LIMIT_WINDOW_SECONDS,
+    UNIT_URIC_ACID,
+)
 
 MG_DL_TO_UMOL_L = 59.48
 MAX_NOTE_LENGTH = 500
 MAX_EXTERNAL_ID_LENGTH = 200
+MAX_FUTURE_SKEW = timedelta(minutes=10)
 
 
 class ObservationValidationError(ValueError):
@@ -56,6 +63,9 @@ class IrminsulRuntimeData:
 
     store: Any
     listeners: set[Callable[[], None]] = field(default_factory=set)
+    rate_limiter: RequestRateLimiter = field(
+        default_factory=lambda: RequestRateLimiter()
+    )
 
     def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]:
         """Subscribe to observation changes."""
@@ -68,7 +78,26 @@ class IrminsulRuntimeData:
             listener()
 
 
-def parse_observation(payload: Any) -> Observation:
+@dataclass(slots=True)
+class RequestRateLimiter:
+    """Limit accepted webhook attempts for one health profile."""
+
+    maximum: int = RATE_LIMIT_REQUESTS
+    window_seconds: int = RATE_LIMIT_WINDOW_SECONDS
+    _attempts: deque[float] = field(default_factory=deque)
+
+    def consume(self, now: float) -> int | None:
+        """Record an attempt or return the retry delay in seconds."""
+        cutoff = now - self.window_seconds
+        while self._attempts and self._attempts[0] <= cutoff:
+            self._attempts.popleft()
+        if len(self._attempts) >= self.maximum:
+            return max(1, math.ceil(self._attempts[0] + self.window_seconds - now))
+        self._attempts.append(now)
+        return None
+
+
+def parse_observation(payload: Any, *, now: datetime | None = None) -> Observation:
     """Validate and normalize one observation payload."""
     if not isinstance(payload, dict):
         raise ObservationValidationError("observation must be an object")
@@ -81,13 +110,17 @@ def parse_observation(payload: Any) -> Observation:
     unit = payload.get("unit")
     value = _normalize_uric_acid(value, unit)
 
-    observed_at = _parse_timestamp(payload.get("observed_at"))
+    observed_at = _parse_timestamp(payload.get("observed_at"), now=now)
     external_id = _parse_optional_text(
         payload.get("external_id"), "external_id", MAX_EXTERNAL_ID_LENGTH
     )
     note = _parse_optional_text(payload.get("note"), "note", MAX_NOTE_LENGTH)
 
-    identity = external_id or f"{metric}|{value:.6f}|{observed_at}"
+    identity = (
+        f"{metric}|external:{external_id}"
+        if external_id
+        else f"{metric}|{value:.6f}|{observed_at}"
+    )
     observation_id = sha256(identity.encode()).hexdigest()
 
     return Observation(
@@ -130,7 +163,7 @@ def _normalize_uric_acid(value: float, unit: Any) -> float:
     return round(normalized_value, 2)
 
 
-def _parse_timestamp(value: Any) -> str:
+def _parse_timestamp(value: Any, *, now: datetime | None = None) -> str:
     if not isinstance(value, str):
         raise ObservationValidationError("observed_at is required")
     try:
@@ -139,7 +172,11 @@ def _parse_timestamp(value: Any) -> str:
         raise ObservationValidationError("observed_at must be ISO 8601") from err
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ObservationValidationError("observed_at must include a time-zone offset")
-    return parsed.astimezone(UTC).isoformat()
+    parsed = parsed.astimezone(UTC)
+    current = now.astimezone(UTC) if now is not None else datetime.now(UTC)
+    if parsed > current + MAX_FUTURE_SKEW:
+        raise ObservationValidationError("observed_at is too far in the future")
+    return parsed.isoformat()
 
 
 def _parse_optional_text(value: Any, field_name: str, maximum: int) -> str | None:

@@ -9,6 +9,8 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_ALLOW_REMOTE,
+    CONF_INGEST_TOKEN,
     CONF_SUBJECT_ID,
     CONF_SUBJECT_NAME,
     CONF_WEBHOOK_ID,
@@ -35,6 +37,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: IrminsulConfigEntry) -> 
             webhook_hass,
             entry.runtime_data,
             entry.data[CONF_SUBJECT_ID],
+            entry.data[CONF_INGEST_TOKEN],
             request,
         )
 
@@ -44,6 +47,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: IrminsulConfigEntry) -> 
         f"Irminsul Health: {entry.data[CONF_SUBJECT_NAME]}",
         entry.data[CONF_WEBHOOK_ID],
         handle_webhook,
+        local_only=not entry.data[CONF_ALLOW_REMOTE],
         allowed_methods={"POST"},
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

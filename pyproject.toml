@@ -3,7 +3,7 @@ name = "irminsul-health"
 version = "0.1.0"
 description = "A person-centered health data hub for Home Assistant"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.14.2"
 license = "MIT"
 authors = [{ name = "Poera" }]
 

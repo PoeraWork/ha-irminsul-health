@@ -9,10 +9,14 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN, MAX_OBSERVATIONS, STORAGE_VERSION
+from .const import DOMAIN, MAX_OBSERVATIONS, SAVE_DELAY_SECONDS, STORAGE_VERSION
 from .models import Observation
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class ObservationConflictError(ValueError):
+    """Raised when an external ID is reused with different content."""
 
 
 class ObservationStore:
@@ -28,7 +32,7 @@ class ObservationStore:
             atomic_writes=True,
         )
         self._observations: list[Observation] = []
-        self._ids: set[str] = set()
+        self._by_id: dict[str, Observation] = {}
         self._lock = asyncio.Lock()
 
     async def async_load(self) -> None:
@@ -44,28 +48,49 @@ class ObservationStore:
         self._observations = sorted(
             loaded, key=lambda observation: observation.observed_at
         )[-MAX_OBSERVATIONS:]
-        self._ids = {observation.observation_id for observation in self._observations}
+        self._by_id = {
+            observation.observation_id: observation
+            for observation in self._observations
+        }
 
     async def async_add_many(self, observations: list[Observation]) -> tuple[int, int]:
         """Add observations and return accepted and duplicate counts."""
         accepted = 0
         duplicates = 0
         async with self._lock:
+            new_items: list[Observation] = []
+            batch_by_id: dict[str, Observation] = {}
             for observation in observations:
-                if observation.observation_id in self._ids:
+                existing = self._by_id.get(observation.observation_id)
+                if existing is not None:
+                    if existing != observation:
+                        raise ObservationConflictError(
+                            "external_id is already used by a different observation"
+                        )
                     duplicates += 1
                     continue
-                self._observations.append(observation)
-                self._ids.add(observation.observation_id)
-                accepted += 1
 
+                existing = batch_by_id.get(observation.observation_id)
+                if existing is not None:
+                    if existing != observation:
+                        raise ObservationConflictError(
+                            "external_id is reused with different content in this batch"
+                        )
+                    duplicates += 1
+                    continue
+                batch_by_id[observation.observation_id] = observation
+                new_items.append(observation)
+
+            accepted = len(new_items)
             if accepted:
+                self._observations.extend(new_items)
+                self._by_id.update(batch_by_id)
                 self._observations.sort(key=lambda item: item.observed_at)
                 removed = self._observations[:-MAX_OBSERVATIONS]
                 self._observations = self._observations[-MAX_OBSERVATIONS:]
                 for observation in removed:
-                    self._ids.discard(observation.observation_id)
-                await self._store.async_save(self.as_dict())
+                    self._by_id.pop(observation.observation_id, None)
+                self._store.async_delay_save(self.as_dict, SAVE_DELAY_SECONDS)
 
         return accepted, duplicates
 

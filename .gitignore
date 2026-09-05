@@ -5,3 +5,9 @@ __pycache__/
 *.py[cod]
 .coverage
 htmlcov/
+.env
+.env.*
+secrets.yaml
+.storage/
+home-assistant_v2.db*
+*.log
