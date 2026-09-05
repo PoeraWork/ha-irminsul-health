@@ -1,0 +1,50 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "This health profile is already configured.",
+      "reconfigure_successful": "The health profile was updated.\n\nWebhook URL: `{webhook_url}`"
+    },
+    "create_entry": {
+      "default": "The health profile is ready. Save this private webhook URL now; it works like a password and is not shown as an entity.\n\n`{webhook_url}`\n\nSend JSON with method POST."
+    },
+    "error": {
+      "invalid_subject_id": "Use lowercase letters, numbers, underscores, or hyphens, starting with a letter or number.",
+      "required": "This field is required."
+    },
+    "step": {
+      "reconfigure": {
+        "data": {
+          "rotate_webhook": "Generate a new webhook URL",
+          "subject_name": "Display name"
+        },
+        "data_description": {
+          "rotate_webhook": "The old URL stops working after the integration reloads."
+        },
+        "description": "Update the display name or rotate the private webhook URL.\n\nCurrent webhook URL: `{webhook_url}`",
+        "title": "Update health profile"
+      },
+      "user": {
+        "data": {
+          "subject_id": "Stable person ID",
+          "subject_name": "Display name"
+        },
+        "data_description": {
+          "subject_id": "A stable internal ID such as user. It cannot be changed later.",
+          "subject_name": "The person's name shown in Home Assistant."
+        },
+        "description": "Create a health profile and a private webhook for one person.",
+        "title": "Create health profile"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "uric_acid": {
+        "name": "Uric acid"
+      },
+      "uric_acid_measured_at": {
+        "name": "Uric acid measured at"
+      }
+    }
+  }
+}
