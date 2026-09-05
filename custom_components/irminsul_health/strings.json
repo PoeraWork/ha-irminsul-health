@@ -9,7 +9,10 @@
     },
     "error": {
       "invalid_subject_id": "Use lowercase letters, numbers, underscores, or hyphens, starting with a letter or number.",
-      "required": "This field is required."
+      "required": "This field is required.",
+      "invalid_person": "Select an existing person entity.",
+      "person_already_linked": "This person is already linked to another health profile.",
+      "invalid_metric_policy": "Select a valid filter mode and metrics."
     },
     "step": {
       "reconfigure": {
@@ -29,12 +32,18 @@
         "data": {
           "allow_remote": "Allow remote requests",
           "subject_id": "Stable person ID",
-          "subject_name": "Display name"
+          "subject_name": "Display name",
+          "person_entity_id": "Linked person",
+          "metric_mode": "Metric filter mode",
+          "metrics": "Metric list"
         },
         "data_description": {
           "allow_remote": "Keep this disabled when the sender uses the local network or a VPN.",
           "subject_id": "A stable internal ID such as user. It cannot be changed later.",
-          "subject_name": "The person's name shown in Home Assistant."
+          "subject_name": "The person's name shown in Home Assistant.",
+          "person_entity_id": "Optional. Link an existing person without modifying its state or creating user-level read access controls. Clear to unlink.",
+          "metric_mode": "Whitelist enables only listed metrics; empty disables all. Blacklist excludes listed metrics; empty enables all, including future metrics.",
+          "metrics": "Controls incoming data and enabled entities. Disabling keeps history. Each metric retains up to 500 records."
         },
         "description": "Create a health profile and two private webhook credentials for one person. Local requests are safer and are the default.",
         "title": "Create health profile"
@@ -43,17 +52,236 @@
   },
   "entity": {
     "sensor": {
+      "uric_acid": {
+        "name": "Uric acid"
+      },
+      "uric_acid_measured_at": {
+        "name": "Uric acid measured at"
+      },
       "blood_glucose": {
         "name": "Blood glucose"
       },
       "blood_glucose_measured_at": {
         "name": "Blood glucose measured at"
       },
-      "uric_acid": {
-        "name": "Uric acid"
+      "height": {
+        "name": "Height"
       },
-      "uric_acid_measured_at": {
-        "name": "Uric acid measured at"
+      "height_measured_at": {
+        "name": "Height measured at"
+      },
+      "weight": {
+        "name": "Weight"
+      },
+      "weight_measured_at": {
+        "name": "Weight measured at"
+      },
+      "bmi": {
+        "name": "BMI"
+      },
+      "bmi_measured_at": {
+        "name": "BMI measured at"
+      },
+      "body_fat": {
+        "name": "Body fat"
+      },
+      "body_fat_measured_at": {
+        "name": "Body fat measured at"
+      },
+      "waist": {
+        "name": "Waist circumference"
+      },
+      "waist_measured_at": {
+        "name": "Waist circumference measured at"
+      },
+      "body_temperature": {
+        "name": "Body temperature"
+      },
+      "body_temperature_measured_at": {
+        "name": "Body temperature measured at"
+      },
+      "heart_rate": {
+        "name": "Heart rate"
+      },
+      "heart_rate_measured_at": {
+        "name": "Heart rate measured at"
+      },
+      "resting_heart_rate": {
+        "name": "Resting heart rate"
+      },
+      "resting_heart_rate_measured_at": {
+        "name": "Resting heart rate measured at"
+      },
+      "hrv_sdnn": {
+        "name": "HRV (SDNN)"
+      },
+      "hrv_sdnn_measured_at": {
+        "name": "HRV (SDNN) measured at"
+      },
+      "oxygen_saturation": {
+        "name": "Oxygen saturation"
+      },
+      "oxygen_saturation_measured_at": {
+        "name": "Oxygen saturation measured at"
+      },
+      "respiratory_rate": {
+        "name": "Respiratory rate"
+      },
+      "respiratory_rate_measured_at": {
+        "name": "Respiratory rate measured at"
+      },
+      "blood_pressure_systolic": {
+        "name": "Systolic blood pressure"
+      },
+      "blood_pressure_systolic_measured_at": {
+        "name": "Systolic blood pressure measured at"
+      },
+      "blood_pressure_diastolic": {
+        "name": "Diastolic blood pressure"
+      },
+      "blood_pressure_diastolic_measured_at": {
+        "name": "Diastolic blood pressure measured at"
+      },
+      "hba1c": {
+        "name": "HbA1c"
+      },
+      "hba1c_measured_at": {
+        "name": "HbA1c measured at"
+      },
+      "total_cholesterol": {
+        "name": "Total cholesterol"
+      },
+      "total_cholesterol_measured_at": {
+        "name": "Total cholesterol measured at"
+      },
+      "triglycerides": {
+        "name": "Triglycerides"
+      },
+      "triglycerides_measured_at": {
+        "name": "Triglycerides measured at"
+      },
+      "hdl_cholesterol": {
+        "name": "HDL cholesterol"
+      },
+      "hdl_cholesterol_measured_at": {
+        "name": "HDL cholesterol measured at"
+      },
+      "ldl_cholesterol": {
+        "name": "LDL cholesterol"
+      },
+      "ldl_cholesterol_measured_at": {
+        "name": "LDL cholesterol measured at"
+      },
+      "steps": {
+        "name": "Daily steps"
+      },
+      "steps_measured_at": {
+        "name": "Daily steps measured at"
+      },
+      "active_distance": {
+        "name": "Daily active distance"
+      },
+      "active_distance_measured_at": {
+        "name": "Daily active distance measured at"
+      },
+      "active_energy": {
+        "name": "Daily active energy"
+      },
+      "active_energy_measured_at": {
+        "name": "Daily active energy measured at"
+      },
+      "exercise_duration": {
+        "name": "Daily exercise duration"
+      },
+      "exercise_duration_measured_at": {
+        "name": "Daily exercise duration measured at"
+      },
+      "sleep_duration": {
+        "name": "Total sleep duration"
+      },
+      "sleep_duration_measured_at": {
+        "name": "Total sleep duration measured at"
+      },
+      "sleep_deep": {
+        "name": "Deep sleep duration"
+      },
+      "sleep_deep_measured_at": {
+        "name": "Deep sleep duration measured at"
+      },
+      "sleep_light": {
+        "name": "Light sleep duration"
+      },
+      "sleep_light_measured_at": {
+        "name": "Light sleep duration measured at"
+      },
+      "sleep_rem": {
+        "name": "REM sleep duration"
+      },
+      "sleep_rem_measured_at": {
+        "name": "REM sleep duration measured at"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Person and health metrics",
+        "description": "Choose the linked person and allowed metrics. Webhook credentials and historical data are preserved.",
+        "data": {
+          "person_entity_id": "Linked person",
+          "metric_mode": "Metric filter mode",
+          "metrics": "Metric list"
+        },
+        "data_description": {
+          "person_entity_id": "Optional. Link an existing person without modifying its state or creating user-level read access controls. Clear to unlink.",
+          "metric_mode": "Whitelist enables only listed metrics; empty disables all. Blacklist excludes listed metrics; empty enables all, including future metrics.",
+          "metrics": "Controls incoming data and enabled entities. Disabling keeps history. Each metric retains up to 500 records."
+        }
+      }
+    },
+    "error": {
+      "invalid_person": "Select an existing person entity.",
+      "person_already_linked": "This person is already linked to another health profile.",
+      "invalid_metric_policy": "Select a valid filter mode and metrics."
+    }
+  },
+  "selector": {
+    "metric_mode": {
+      "options": {
+        "whitelist": "Whitelist: enable listed metrics",
+        "blacklist": "Blacklist: exclude listed metrics"
+      }
+    },
+    "metrics": {
+      "options": {
+        "uric_acid": "Uric acid",
+        "blood_glucose": "Blood glucose",
+        "height": "Height",
+        "weight": "Weight",
+        "bmi": "BMI",
+        "body_fat": "Body fat",
+        "waist": "Waist circumference",
+        "body_temperature": "Body temperature",
+        "heart_rate": "Heart rate",
+        "resting_heart_rate": "Resting heart rate",
+        "hrv_sdnn": "HRV (SDNN)",
+        "oxygen_saturation": "Oxygen saturation",
+        "respiratory_rate": "Respiratory rate",
+        "blood_pressure_systolic": "Systolic blood pressure",
+        "blood_pressure_diastolic": "Diastolic blood pressure",
+        "hba1c": "HbA1c",
+        "total_cholesterol": "Total cholesterol",
+        "triglycerides": "Triglycerides",
+        "hdl_cholesterol": "HDL cholesterol",
+        "ldl_cholesterol": "LDL cholesterol",
+        "steps": "Daily steps",
+        "active_distance": "Daily active distance",
+        "active_energy": "Daily active energy",
+        "exercise_duration": "Daily exercise duration",
+        "sleep_duration": "Total sleep duration",
+        "sleep_deep": "Deep sleep duration",
+        "sleep_light": "Light sleep duration",
+        "sleep_rem": "REM sleep duration"
       }
     }
   }

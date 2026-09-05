@@ -11,6 +11,12 @@ CONF_WEBHOOK_ID: Final = "webhook_id"
 CONF_INGEST_TOKEN: Final = "ingest_token"
 CONF_ALLOW_REMOTE: Final = "allow_remote"
 CONF_ROTATE_WEBHOOK: Final = "rotate_webhook"
+CONF_PERSON_ENTITY_ID: Final = "person_entity_id"
+CONF_PERSON_REGISTRY_ID: Final = "person_registry_id"
+CONF_METRIC_MODE: Final = "metric_mode"
+CONF_METRICS: Final = "metrics"
+MODE_WHITELIST: Final = "whitelist"
+MODE_BLACKLIST: Final = "blacklist"
 
 EVENT_OBSERVATION_RECEIVED: Final = f"{DOMAIN}_observation_received"
 

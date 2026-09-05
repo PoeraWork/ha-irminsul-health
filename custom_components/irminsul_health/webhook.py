@@ -17,8 +17,10 @@ from .const import (
 )
 from .models import (
     IrminsulRuntimeData,
+    MetricNotAllowedError,
     Observation,
     ObservationValidationError,
+    ProfileUnavailableError,
     parse_observation,
 )
 from .storage import ObservationConflictError
@@ -86,7 +88,14 @@ async def async_handle_webhook(
         return _error(str(err), HTTPStatus.BAD_REQUEST)
 
     try:
-        accepted, duplicates = await runtime_data.store.async_add_many(observations)
+        runtime_data.check_writable(observations)
+        accepted, duplicates = await runtime_data.store.async_add_many(
+            observations, check_writable=runtime_data.check_writable
+        )
+    except MetricNotAllowedError as err:
+        return _error(str(err), HTTPStatus.FORBIDDEN)
+    except ProfileUnavailableError as err:
+        return _error(str(err), HTTPStatus.SERVICE_UNAVAILABLE)
     except ObservationConflictError as err:
         return _error(str(err), HTTPStatus.CONFLICT)
     if accepted:

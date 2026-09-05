@@ -16,6 +16,7 @@ from .const import (
     CONF_WEBHOOK_ID,
     DOMAIN,
 )
+from .metrics import enabled_metrics
 from .models import IrminsulRuntimeData
 from .storage import ObservationStore
 from .webhook import async_handle_webhook
@@ -28,14 +29,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: IrminsulConfigEntry) -> 
     """Set up Irminsul Health from a config entry."""
     store = ObservationStore(hass, entry.entry_id)
     await store.async_load()
-    entry.runtime_data = IrminsulRuntimeData(store=store)
+    runtime = entry.runtime_data = IrminsulRuntimeData(
+        store=store,
+        metric_policy=lambda: enabled_metrics(entry.options),
+        webhook_id=entry.data[CONF_WEBHOOK_ID],
+    )
 
     async def handle_webhook(
         webhook_hass: HomeAssistant, _webhook_id: str, request: Request
     ) -> Response:
         return await async_handle_webhook(
             webhook_hass,
-            entry.runtime_data,
+            runtime,
             entry.data[CONF_SUBJECT_ID],
             entry.data[CONF_INGEST_TOKEN],
             request,
@@ -56,9 +61,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: IrminsulConfigEntry) -> 
 
 async def async_unload_entry(hass: HomeAssistant, entry: IrminsulConfigEntry) -> bool:
     """Unload a config entry."""
+    entry.runtime_data.accepting = False
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        entry.runtime_data.accepting = True
         return False
-    ha_webhook.async_unregister(hass, entry.data[CONF_WEBHOOK_ID])
+    await entry.runtime_data.store.async_flush()
+    ha_webhook.async_unregister(hass, entry.runtime_data.webhook_id)
     return True
 
 

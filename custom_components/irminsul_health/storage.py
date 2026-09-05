@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import Counter
+from collections.abc import Callable
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -45,19 +47,24 @@ class ObservationStore:
             except (KeyError, TypeError, ValueError):
                 _LOGGER.warning("Skipped an invalid stored observation")
 
-        self._observations = sorted(
-            loaded, key=lambda observation: observation.observed_at
-        )[-MAX_OBSERVATIONS:]
+        self._observations = self._retain_per_metric(loaded)
         self._by_id = {
             observation.observation_id: observation
             for observation in self._observations
         }
 
-    async def async_add_many(self, observations: list[Observation]) -> tuple[int, int]:
+    async def async_add_many(
+        self,
+        observations: list[Observation],
+        *,
+        check_writable: Callable[[list[Observation]], None] | None = None,
+    ) -> tuple[int, int]:
         """Add observations and return accepted and duplicate counts."""
         accepted = 0
         duplicates = 0
         async with self._lock:
+            if check_writable is not None:
+                check_writable(observations)
             new_items: list[Observation] = []
             batch_by_id: dict[str, Observation] = {}
             for observation in observations:
@@ -84,15 +91,28 @@ class ObservationStore:
             accepted = len(new_items)
             if accepted:
                 self._observations.extend(new_items)
-                self._by_id.update(batch_by_id)
-                self._observations.sort(key=lambda item: item.observed_at)
-                removed = self._observations[:-MAX_OBSERVATIONS]
-                self._observations = self._observations[-MAX_OBSERVATIONS:]
-                for observation in removed:
-                    self._by_id.pop(observation.observation_id, None)
+                self._observations = self._retain_per_metric(self._observations)
+                self._by_id = {item.observation_id: item for item in self._observations}
                 self._store.async_delay_save(self.as_dict, SAVE_DELAY_SECONDS)
 
         return accepted, duplicates
+
+    @staticmethod
+    def _retain_per_metric(observations: list[Observation]) -> list[Observation]:
+        """Keep recent records independently so activity cannot evict lab results."""
+        counts: Counter[str] = Counter()
+        retained = []
+        ordered = sorted(observations, key=lambda item: item.observed_at)
+        for item in reversed(ordered):
+            if counts[item.metric] < MAX_OBSERVATIONS:
+                retained.append(item)
+                counts[item.metric] += 1
+        return list(reversed(retained))
+
+    async def async_flush(self) -> None:
+        """Flush delayed writes before a config reload reads the store again."""
+        async with self._lock:
+            await self._store.async_save(self.as_dict())
 
     def latest(self, metric: str) -> Observation | None:
         """Return the newest observation for a metric."""

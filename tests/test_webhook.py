@@ -1,11 +1,13 @@
 """Tests for the health observation webhook."""
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from custom_components.irminsul_health.models import IrminsulRuntimeData
+from custom_components.irminsul_health.storage import ObservationStore
 from custom_components.irminsul_health.webhook import async_handle_webhook
 
 
@@ -75,3 +77,78 @@ async def test_reject_deep_json(hass) -> None:
     response = await async_handle_webhook(hass, runtime, "user", "test-token", request)
 
     assert response.status == 400
+
+
+def _reading(metric="weight", value=60, unit="kg"):
+    return {
+        "metric": metric,
+        "value": value,
+        "unit": unit,
+        "observed_at": "2025-01-01T00:00:00Z",
+    }
+
+
+async def test_profile_policy_rejects_entire_batch(hass):
+    """No partial writes when a batch includes a disabled metric."""
+    store = ObservationStore(hass, "test-entry")
+    store._store.async_delay_save = MagicMock()
+    runtime = IrminsulRuntimeData(store, metric_policy=lambda: frozenset({"weight"}))
+    request = _request(
+        {
+            "schema_version": 1,
+            "observations": [_reading(), _reading("steps", 100, "steps")],
+        }
+    )
+    response = await async_handle_webhook(hass, runtime, "user", "test-token", request)
+    assert response.status == 403
+    assert store.as_dict() == {"observations": []}
+    store._store.async_delay_save.assert_not_called()
+
+
+@pytest.mark.parametrize("unload", [False, True])
+async def test_policy_rechecked_after_waiting_for_store_lock(hass, unload):
+    """A request already parsed cannot bypass a subsequent disable or unload."""
+    store = ObservationStore(hass, "test-entry")
+    store._store.async_delay_save = MagicMock()
+    allowed = frozenset({"weight"})
+    checked = asyncio.Event()
+
+    def policy():
+        checked.set()
+        return allowed
+
+    runtime = IrminsulRuntimeData(store, metric_policy=policy)
+    request = _request({"schema_version": 1, "observations": [_reading()]})
+    await store._lock.acquire()
+    task = asyncio.create_task(
+        async_handle_webhook(hass, runtime, "user", "test-token", request)
+    )
+    try:
+        await asyncio.wait_for(checked.wait(), timeout=5)
+        if unload:
+            runtime.accepting = False
+        else:
+            allowed = frozenset()
+    finally:
+        store._lock.release()
+    response = await task
+    assert response.status == (503 if unload else 403)
+    assert store.as_dict() == {"observations": []}
+
+
+async def test_profiles_have_independent_policies(hass):
+    """One profile's whitelist never grants another profile permission."""
+    for index, allowed in enumerate([frozenset({"weight"}), frozenset()]):
+        store = ObservationStore(hass, f"entry-{index}")
+        store._store.async_delay_save = MagicMock()
+        runtime = IrminsulRuntimeData(
+            store, metric_policy=lambda allowed=allowed: allowed
+        )
+        response = await async_handle_webhook(
+            hass,
+            runtime,
+            f"user-{index}",
+            "test-token",
+            _request({"schema_version": 1, "observations": [_reading()]}),
+        )
+        assert response.status == (200 if index == 0 else 403)

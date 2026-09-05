@@ -11,16 +11,11 @@ from hashlib import sha256
 from typing import Any
 
 from .const import (
-    METRIC_BLOOD_GLUCOSE,
-    METRIC_URIC_ACID,
     RATE_LIMIT_REQUESTS,
     RATE_LIMIT_WINDOW_SECONDS,
-    UNIT_BLOOD_GLUCOSE,
-    UNIT_URIC_ACID,
 )
+from .metrics import METRICS
 
-MG_DL_TO_UMOL_L = 59.48
-GLUCOSE_MG_DL_PER_MMOL_L = 18.0
 MAX_NOTE_LENGTH = 500
 MAX_EXTERNAL_ID_LENGTH = 200
 MAX_FUTURE_SKEW = timedelta(minutes=10)
@@ -28,6 +23,14 @@ MAX_FUTURE_SKEW = timedelta(minutes=10)
 
 class ObservationValidationError(ValueError):
     """Raised when an observation is invalid."""
+
+
+class MetricNotAllowedError(ValueError):
+    """Raised when a profile does not accept an observation's metric."""
+
+
+class ProfileUnavailableError(RuntimeError):
+    """Raised when a profile is unloading."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +68,11 @@ class IrminsulRuntimeData:
     """Runtime data shared by platforms and the webhook."""
 
     store: Any
+    metric_policy: Callable[[], frozenset[str]] = field(
+        default=lambda: frozenset(METRICS)
+    )
+    accepting: bool = True
+    webhook_id: str | None = None
     listeners: set[Callable[[], None]] = field(default_factory=set)
     rate_limiter: RequestRateLimiter = field(
         default_factory=lambda: RequestRateLimiter()
@@ -79,6 +87,16 @@ class IrminsulRuntimeData:
         """Notify entities that stored observations changed."""
         for listener in tuple(self.listeners):
             listener()
+
+    def check_writable(self, observations: list[Observation]) -> None:
+        """Check the current policy again at the storage write boundary."""
+        if not self.accepting:
+            raise ProfileUnavailableError("health profile is reloading")
+        allowed = self.metric_policy()
+        if any(observation.metric not in allowed for observation in observations):
+            raise MetricNotAllowedError(
+                "one or more metrics are disabled for this profile"
+            )
 
 
 @dataclass(slots=True)
@@ -106,17 +124,16 @@ def parse_observation(payload: Any, *, now: datetime | None = None) -> Observati
         raise ObservationValidationError("observation must be an object")
 
     metric = payload.get("metric")
-    if metric not in (METRIC_URIC_ACID, METRIC_BLOOD_GLUCOSE):
-        raise ObservationValidationError("metric must be uric_acid or blood_glucose")
+    if not isinstance(metric, str) or metric not in METRICS:
+        raise ObservationValidationError("unsupported metric")
 
     value = _parse_number(payload.get("value"))
     unit = payload.get("unit")
-    if metric == METRIC_URIC_ACID:
-        value = _normalize_uric_acid(value, unit)
-        normalized_unit = UNIT_URIC_ACID
-    else:
-        value = _normalize_blood_glucose(value, unit)
-        normalized_unit = UNIT_BLOOD_GLUCOSE
+    try:
+        value = METRICS[metric].normalize(value, unit)
+    except ValueError as err:
+        raise ObservationValidationError(str(err)) from err
+    normalized_unit = METRICS[metric].unit
 
     observed_at = _parse_timestamp(payload.get("observed_at"), now=now)
     external_id = _parse_optional_text(
@@ -152,42 +169,6 @@ def _parse_number(value: Any) -> float:
     if not math.isfinite(parsed):
         raise ObservationValidationError("value must be finite")
     return parsed
-
-
-def _normalize_uric_acid(value: float, unit: Any) -> float:
-    if not isinstance(unit, str):
-        raise ObservationValidationError("unit is required")
-
-    normalized_unit = unit.strip().replace("μ", "µ").lower()
-    if normalized_unit in {"µmol/l", "umol/l"}:
-        normalized_value = value
-    elif normalized_unit == "mg/dl":
-        normalized_value = value * MG_DL_TO_UMOL_L
-    else:
-        raise ObservationValidationError("unit must be µmol/L or mg/dL")
-
-    if not 0 < normalized_value <= 3000:
-        raise ObservationValidationError("uric acid value is outside 0-3000 µmol/L")
-    return round(normalized_value, 2)
-
-
-def _normalize_blood_glucose(value: float, unit: Any) -> float:
-    """Normalize glucose without inferring a diagnosis or measurement type."""
-    if not isinstance(unit, str):
-        raise ObservationValidationError("unit is required")
-    normalized_unit = unit.strip().lower()
-    if normalized_unit == "mmol/l":
-        normalized_value = value
-    elif normalized_unit == "mg/dl":
-        normalized_value = value / GLUCOSE_MG_DL_PER_MMOL_L
-    else:
-        raise ObservationValidationError("blood glucose unit must be mmol/L or mg/dL")
-    normalized_value = round(normalized_value, 2)
-    if normalized_value <= 0:
-        raise ObservationValidationError(
-            "blood glucose must be positive after rounding"
-        )
-    return normalized_value
 
 
 def _parse_timestamp(value: Any, *, now: datetime | None = None) -> str:
