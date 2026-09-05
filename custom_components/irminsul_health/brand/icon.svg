@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Irminsul Health</title>
+  <desc id="desc">A jade heart enclosing a tree, branching roots and a golden seed.</desc>
+  <defs>
+    <linearGradient id="jade" x1="48" y1="40" x2="208" y2="208" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#55cfab"/>
+      <stop offset="1" stop-color="#15856e"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#jade)" d="M128 225C103 207 28 145 28 90C28 42 88 23 128 68C168 23 228 42 228 90C228 145 153 207 128 225Z"/>
+  <g fill="none" stroke="#edfff5" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M128 197V108M128 149L88 115M128 133L168 99M104 180L128 158L152 180"/>
+  </g>
+  <circle cx="128" cy="88" r="9" fill="#f4d48b"/>
+</svg>

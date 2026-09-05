@@ -5,7 +5,7 @@
       "reconfigure_successful": "The health profile was updated.\n\nWebhook URL: `{webhook_url}`\n\nIngest token: `{ingest_token}`"
     },
     "create_entry": {
-      "default": "The health profile is ready. Save both credentials now; they work like passwords and are not shown as entities.\n\nWebhook URL: `{webhook_url}`\n\nIngest token: `{ingest_token}`\n\nSend JSON with method POST and the header `Authorization: Bearer <ingest token>`."
+      "default": "The health profile is ready. Save both credentials now; they work like passwords and are not shown as entities.\n\nWebhook URL: `{webhook_url}`\n\nIngest token: `{ingest_token}`\n\nSend JSON with method POST and the header `Authorization: Bearer TOKEN`, replacing TOKEN with your ingest token."
     },
     "error": {
       "invalid_subject_id": "Use lowercase letters, numbers, underscores, or hyphens, starting with a letter or number.",

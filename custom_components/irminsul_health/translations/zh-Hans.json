@@ -5,7 +5,7 @@
       "reconfigure_successful": "健康档案已更新。\n\nWebhook 地址：`{webhook_url}`\n\n写入令牌：`{ingest_token}`"
     },
     "create_entry": {
-      "default": "健康档案已创建。请立即保存下面两项凭据；它们相当于密码，不会作为实体公开。\n\nWebhook 地址：`{webhook_url}`\n\n写入令牌：`{ingest_token}`\n\n请使用 POST 方法发送 JSON，并设置请求头 `Authorization: Bearer <写入令牌>`。"
+      "default": "健康档案已创建。请立即保存下面两项凭据；它们相当于密码，不会作为实体公开。\n\nWebhook 地址：`{webhook_url}`\n\n写入令牌：`{ingest_token}`\n\n请使用 POST 方法发送 JSON，并设置请求头 `Authorization: Bearer TOKEN`，将 TOKEN 替换为你的写入令牌。"
     },
     "error": {
       "invalid_subject_id": "请使用小写字母、数字、下划线或连字符，并以字母或数字开头。",
