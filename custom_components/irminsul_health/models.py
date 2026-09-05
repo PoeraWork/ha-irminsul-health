@@ -11,13 +11,16 @@ from hashlib import sha256
 from typing import Any
 
 from .const import (
+    METRIC_BLOOD_GLUCOSE,
     METRIC_URIC_ACID,
     RATE_LIMIT_REQUESTS,
     RATE_LIMIT_WINDOW_SECONDS,
+    UNIT_BLOOD_GLUCOSE,
     UNIT_URIC_ACID,
 )
 
 MG_DL_TO_UMOL_L = 59.48
+GLUCOSE_MG_DL_PER_MMOL_L = 18.0
 MAX_NOTE_LENGTH = 500
 MAX_EXTERNAL_ID_LENGTH = 200
 MAX_FUTURE_SKEW = timedelta(minutes=10)
@@ -103,12 +106,17 @@ def parse_observation(payload: Any, *, now: datetime | None = None) -> Observati
         raise ObservationValidationError("observation must be an object")
 
     metric = payload.get("metric")
-    if metric != METRIC_URIC_ACID:
-        raise ObservationValidationError("metric must be uric_acid")
+    if metric not in (METRIC_URIC_ACID, METRIC_BLOOD_GLUCOSE):
+        raise ObservationValidationError("metric must be uric_acid or blood_glucose")
 
     value = _parse_number(payload.get("value"))
     unit = payload.get("unit")
-    value = _normalize_uric_acid(value, unit)
+    if metric == METRIC_URIC_ACID:
+        value = _normalize_uric_acid(value, unit)
+        normalized_unit = UNIT_URIC_ACID
+    else:
+        value = _normalize_blood_glucose(value, unit)
+        normalized_unit = UNIT_BLOOD_GLUCOSE
 
     observed_at = _parse_timestamp(payload.get("observed_at"), now=now)
     external_id = _parse_optional_text(
@@ -127,7 +135,7 @@ def parse_observation(payload: Any, *, now: datetime | None = None) -> Observati
         observation_id=observation_id,
         metric=metric,
         value=value,
-        unit=UNIT_URIC_ACID,
+        unit=normalized_unit,
         observed_at=observed_at,
         external_id=external_id,
         note=note,
@@ -161,6 +169,25 @@ def _normalize_uric_acid(value: float, unit: Any) -> float:
     if not 0 < normalized_value <= 3000:
         raise ObservationValidationError("uric acid value is outside 0-3000 µmol/L")
     return round(normalized_value, 2)
+
+
+def _normalize_blood_glucose(value: float, unit: Any) -> float:
+    """Normalize glucose without inferring a diagnosis or measurement type."""
+    if not isinstance(unit, str):
+        raise ObservationValidationError("unit is required")
+    normalized_unit = unit.strip().lower()
+    if normalized_unit == "mmol/l":
+        normalized_value = value
+    elif normalized_unit == "mg/dl":
+        normalized_value = value / GLUCOSE_MG_DL_PER_MMOL_L
+    else:
+        raise ObservationValidationError("blood glucose unit must be mmol/L or mg/dL")
+    normalized_value = round(normalized_value, 2)
+    if normalized_value <= 0:
+        raise ObservationValidationError(
+            "blood glucose must be positive after rounding"
+        )
+    return normalized_value
 
 
 def _parse_timestamp(value: Any, *, now: datetime | None = None) -> str:

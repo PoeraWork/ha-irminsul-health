@@ -87,3 +87,62 @@ def test_rate_limiter() -> None:
     assert limiter.consume(1) is None
     assert limiter.consume(2) == 58
     assert limiter.consume(61) is None
+
+
+@pytest.mark.parametrize(
+    ("value", "unit", "expected"),
+    [(5.6, "mmol/L", 5.6), (108, "mg/dL", 6.0), ("99", " MG/DL ", 5.5)],
+)
+def test_parse_blood_glucose(value, unit, expected) -> None:
+    """Normalize glucose only after the caller explicitly selects the metric."""
+    observation = parse_observation(
+        {
+            "metric": "blood_glucose",
+            "value": value,
+            "unit": unit,
+            "observed_at": "2026-01-01T08:00:00+08:00",
+        }
+    )
+    assert observation.metric == "blood_glucose"
+    assert observation.value == expected
+    assert observation.unit == "mmol/L"
+
+
+@pytest.mark.parametrize(
+    ("value", "unit"),
+    [
+        (6, "µmol/L"),
+        (6, None),
+        (0, "mmol/L"),
+        (-1, "mg/dL"),
+        (float("inf"), "mmol/L"),
+        (True, "mmol/L"),
+        (0.001, "mmol/L"),
+        ("HI", "mmol/L"),
+        ("6,4", "mmol/L"),
+    ],
+)
+def test_reject_invalid_glucose(value, unit) -> None:
+    """Reject invalid input without guessing a unit or fixing OCR text."""
+    with pytest.raises(ObservationValidationError):
+        parse_observation(
+            {
+                "metric": "blood_glucose",
+                "value": value,
+                "unit": unit,
+                "observed_at": "2026-01-01T00:00:00Z",
+            }
+        )
+
+
+def test_metrics_do_not_share_observation_identity() -> None:
+    """The same external ID can describe separate metrics from one report."""
+    payload = {
+        "value": 108,
+        "unit": "mg/dL",
+        "external_id": "report-1",
+        "observed_at": "2026-01-01T00:00:00Z",
+    }
+    acid = parse_observation({**payload, "metric": "uric_acid", "value": 6})
+    glucose = parse_observation({**payload, "metric": "blood_glucose"})
+    assert acid.observation_id != glucose.observation_id

@@ -3,6 +3,8 @@
 import json
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from custom_components.irminsul_health.models import IrminsulRuntimeData
 from custom_components.irminsul_health.webhook import async_handle_webhook
 
@@ -29,7 +31,11 @@ async def test_reject_missing_token(hass) -> None:
     store.async_add_many.assert_not_awaited()
 
 
-async def test_accept_observation(hass) -> None:
+@pytest.mark.parametrize(
+    ("metric", "value", "unit"),
+    [("uric_acid", 426, "µmol/L"), ("blood_glucose", 108, "mg/dL")],
+)
+async def test_accept_observation(hass, metric, value, unit) -> None:
     """Accept a valid authorized observation."""
     store = MagicMock()
     store.async_add_many = AsyncMock(return_value=(1, 0))
@@ -39,9 +45,9 @@ async def test_accept_observation(hass) -> None:
             "schema_version": 1,
             "observations": [
                 {
-                    "metric": "uric_acid",
-                    "value": 426,
-                    "unit": "µmol/L",
+                    "metric": metric,
+                    "value": value,
+                    "unit": unit,
                     "observed_at": "2026-09-05T08:30:00+08:00",
                 }
             ],
@@ -52,6 +58,9 @@ async def test_accept_observation(hass) -> None:
 
     assert response.status == 200
     assert json.loads(response.body) == {"accepted": 1, "duplicates": 0}
+    observation = store.async_add_many.call_args.args[0][0]
+    assert observation.metric == metric
+    assert observation.value == (6.0 if metric == "blood_glucose" else 426)
 
 
 async def test_reject_deep_json(hass) -> None:

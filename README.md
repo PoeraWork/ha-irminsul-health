@@ -4,7 +4,7 @@ Irminsul Health is a person-centered health data hub for Home Assistant. It
 accepts low-frequency health observations through a private webhook, keeps an
 exact bounded record, and exposes the latest value as Home Assistant entities.
 
-The first development slice supports uric acid observations. The data contract
+The current development slice supports uric acid and blood glucose observations. The data contract
 is versioned so Apple HealthKit, Android Health Connect, OCR, and device adapters
 can be added without making Home Assistant depend on one mobile platform.
 
@@ -52,6 +52,21 @@ time-zone offset. Repeating the same `external_id` is safe and does not create a
 duplicate record. Reusing it for different content is rejected. Timestamps more
 than ten minutes in the future are rejected.
 
+For blood glucose, use `metric: "blood_glucose"` with `mmol/L` or `mg/dL`.
+Glucose is stored in `mmol/L`, rounded to two decimal places. The conversion is
+`mg/dL / 18`, using the approximate rule documented in the
+[FORA glucose meter manual](https://foracare.ch/wp-content/uploads/2021/10/FORA-Diamond-GD50-4286B_meter-manual.pdf).
+The caller must explicitly choose the metric and the original measurement unit;
+the integration does not classify values by their range. Glucose validation
+requires a finite positive value that remains positive after rounding; it does
+not classify clinical risk. Text such as `HI` or `LO` is not a numeric observation.
+
+The companion `irminsul-shortcuts` project has a single-record photo OCR template.
+The user selects uric acid or blood glucose, corrects the recognized value, chooses
+the original unit, and confirms the measurement time before submitting. Only
+confirmed fields reach this webhook, not the photo or full OCR text. The template
+still needs macOS signing and iPhone validation. It does not read Apple Health.
+
 Example response:
 
 ```json
@@ -66,10 +81,15 @@ Example response:
 - Multiple people through separate config entries.
 - One generic webhook source for each person.
 - Exact storage of up to 500 low-frequency observations per person.
-- Latest uric acid value and measurement-time sensors.
+- Latest uric acid and blood glucose values and measurement-time sensors.
 - Chinese and English UI text.
 
-High-frequency raw samples, custom dashboard cards, OCR, source subentries, and
+Existing uric acid entity IDs, credentials, and stored observations are unchanged.
+After updating the integration and restarting HA, a profile also has glucose
+entities; their values remain unknown until a glucose observation is submitted.
+The 500-record limit is shared across both metrics in a profile, not per metric.
+
+High-frequency raw samples, custom dashboard cards, server-side OCR, source subentries, and
 long-term-statistics imports are intentionally outside version 0.1.
 
 ## Privacy and data lifetime

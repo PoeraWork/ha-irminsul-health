@@ -43,6 +43,12 @@
   },
   "entity": {
     "sensor": {
+      "blood_glucose": {
+        "name": "Blood glucose"
+      },
+      "blood_glucose_measured_at": {
+        "name": "Blood glucose measured at"
+      },
       "uric_acid": {
         "name": "Uric acid"
       },

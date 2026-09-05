@@ -23,3 +23,5 @@ SAVE_DELAY_SECONDS: Final = 5
 
 METRIC_URIC_ACID: Final = "uric_acid"
 UNIT_URIC_ACID: Final = "µmol/L"
+METRIC_BLOOD_GLUCOSE: Final = "blood_glucose"
+UNIT_BLOOD_GLUCOSE: Final = "mmol/L"

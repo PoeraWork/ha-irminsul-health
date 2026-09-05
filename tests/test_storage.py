@@ -1,6 +1,6 @@
 """Tests for bounded observation storage."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -57,3 +57,33 @@ async def test_reject_external_id_conflict(hass) -> None:
     await store.async_add_many([first])
     with pytest.raises(ObservationConflictError):
         await store.async_add_many([conflicting])
+
+
+async def test_load_uric_acid_profile_and_add_glucose(hass) -> None:
+    """Keep old data when an existing profile starts receiving another metric."""
+    acid = parse_observation(
+        {
+            "metric": "uric_acid",
+            "value": 400,
+            "unit": "µmol/L",
+            "observed_at": "2026-01-01T00:00:00Z",
+        }
+    )
+    glucose = parse_observation(
+        {
+            "metric": "blood_glucose",
+            "value": 5.6,
+            "unit": "mmol/L",
+            "observed_at": "2026-01-02T00:00:00Z",
+        }
+    )
+    store = ObservationStore(hass, "test-entry")
+    store._store.async_load = AsyncMock(return_value={"observations": [acid.as_dict()]})
+    store._store.async_delay_save = MagicMock()
+    await store.async_load()
+    assert store.latest("blood_glucose") is None
+    assert await store.async_add_many([glucose]) == (1, 0)
+    assert store.latest("uric_acid") == acid
+    assert store.latest("blood_glucose") == glucose
+    assert store.as_dict() == {"observations": [acid.as_dict(), glucose.as_dict()]}
+    assert await store.async_add_many([acid, glucose]) == (0, 2)

@@ -15,7 +15,9 @@ from .const import (
     CONF_SUBJECT_ID,
     CONF_SUBJECT_NAME,
     DOMAIN,
+    METRIC_BLOOD_GLUCOSE,
     METRIC_URIC_ACID,
+    UNIT_BLOOD_GLUCOSE,
     UNIT_URIC_ACID,
 )
 from .models import IrminsulRuntimeData, Observation
@@ -31,6 +33,8 @@ async def async_setup_entry(
         [
             UricAcidSensor(entry),
             UricAcidMeasuredAtSensor(entry),
+            BloodGlucoseSensor(entry),
+            BloodGlucoseMeasuredAtSensor(entry),
         ]
     )
 
@@ -39,6 +43,7 @@ class IrminsulSensorEntity(SensorEntity):
     """Base entity backed by the observation store."""
 
     _attr_has_entity_name = True
+    _metric = METRIC_URIC_ACID
 
     def __init__(self, entry: ConfigEntry[IrminsulRuntimeData]) -> None:
         """Initialize the entity."""
@@ -60,7 +65,7 @@ class IrminsulSensorEntity(SensorEntity):
         self.async_write_ha_state()
 
     def _latest(self) -> Observation | None:
-        return self._runtime_data.store.latest(METRIC_URIC_ACID)
+        return self._runtime_data.store.latest(self._metric)
 
 
 class UricAcidSensor(IrminsulSensorEntity):
@@ -99,5 +104,47 @@ class UricAcidMeasuredAtSensor(IrminsulSensorEntity):
     @property
     def native_value(self) -> datetime | None:
         """Return when the newest uric acid value was measured."""
+        observation = self._latest()
+        return datetime.fromisoformat(observation.observed_at) if observation else None
+
+
+class BloodGlucoseSensor(IrminsulSensorEntity):
+    """Latest manually classified blood glucose measurement."""
+
+    _metric = METRIC_BLOOD_GLUCOSE
+    _attr_translation_key = "blood_glucose"
+    _attr_native_unit_of_measurement = UNIT_BLOOD_GLUCOSE
+    _attr_icon = "mdi:water"
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, entry: ConfigEntry[IrminsulRuntimeData]) -> None:
+        """Initialize the latest value sensor."""
+        super().__init__(entry)
+        self._attr_unique_id = f"{self._subject_id}_blood_glucose"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the newest glucose value."""
+        observation = self._latest()
+        return observation.value if observation else None
+
+
+class BloodGlucoseMeasuredAtSensor(IrminsulSensorEntity):
+    """Timestamp of the latest blood glucose measurement."""
+
+    _metric = METRIC_BLOOD_GLUCOSE
+    _attr_translation_key = "blood_glucose_measured_at"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:clock-check-outline"
+
+    def __init__(self, entry: ConfigEntry[IrminsulRuntimeData]) -> None:
+        """Initialize the measurement timestamp sensor."""
+        super().__init__(entry)
+        self._attr_unique_id = f"{self._subject_id}_blood_glucose_measured_at"
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return when the newest glucose value was measured."""
         observation = self._latest()
         return datetime.fromisoformat(observation.observed_at) if observation else None

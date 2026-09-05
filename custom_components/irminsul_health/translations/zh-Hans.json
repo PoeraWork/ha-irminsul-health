@@ -43,6 +43,12 @@
   },
   "entity": {
     "sensor": {
+      "blood_glucose": {
+        "name": "血糖"
+      },
+      "blood_glucose_measured_at": {
+        "name": "血糖测量时间"
+      },
       "uric_acid": {
         "name": "尿酸"
       },
